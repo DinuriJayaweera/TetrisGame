@@ -34,6 +34,9 @@ class _GameBoardState extends State<GameBoard> {
   //current tetris piecce
   Piece currentPiece = Piece(type: Tetromino.L);
 
+  //current score
+  int currentScore = 0;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +59,9 @@ class _GameBoardState extends State<GameBoard> {
       frameRate, 
     (timer) {
       setState(() {
+        // clear lines
+        clearLines();
+        
         // check landing
         checkLanding();
 
@@ -157,6 +163,39 @@ class _GameBoardState extends State<GameBoard> {
     });
   }
  
+ // clear lines 
+  void clearLines() {
+    // step 1: Loop through each row of the game board from the bottom to top
+    for (int row = colLength - 1; row >= 0; row--) {
+      // step 2: Initialize a variable to track if the row is full
+      bool rowIsFull = true;
+
+      // step 3: Check if the row is full (all columns in the row are filled with pieces)
+      for (int col = 0; col < rowLength; col++) {
+        // If there's an empty column, set rowIsFull to false and break the loop
+        if (gameBoard[row][col] == null) {
+          rowIsFull = false;
+          break;
+        }
+      }
+
+      // step 4: If the row is full, clear the row and shift rows down
+      if (rowIsFull) {
+        // step 5: move all rows above the cleared row down by one position
+        for (int r = row; r > 0; r--) {
+          //copy the row above to the current row
+         gameBoard[r] = List.from(gameBoard[r - 1]); 
+        }
+
+        // step 6:  set the top row to empty
+        gameBoard[0] = List.generate(rowLength, (index) => null);
+
+        // step 7: Increment the score!
+        currentScore++;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -200,9 +239,15 @@ class _GameBoardState extends State<GameBoard> {
             ),
           ),
 
+          //SCORE
+          Text(
+            'Score: $currentScore',
+            style: TextStyle(color: Colors.white)
+            ),
+
           //GAME CONTROLS
           Padding(
-            padding: const EdgeInsets.only(bottom: 50.0),
+            padding: const EdgeInsets.only(bottom: 50.0, top: 50),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
