@@ -40,6 +40,10 @@ class _GameBoardState extends State<GameBoard> {
   // game over status
   bool gameOver = false;
 
+  // pause state
+  bool isPaused = false;
+  Timer? gameTimer;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +54,7 @@ class _GameBoardState extends State<GameBoard> {
 
   void startGame() {
     currentPiece.initializePiece();
+    isPaused = false;
 
     //frame refresh rate
     Duration frameRate = const Duration(milliseconds: 500);
@@ -58,25 +63,28 @@ class _GameBoardState extends State<GameBoard> {
 
   //game loop
   void gameLoop(Duration frameRate) {
-    Timer.periodic(
+    gameTimer?.cancel();
+    gameTimer = Timer.periodic(
       frameRate, 
     (timer) {
-      setState(() {
-        // clear lines
-        clearLines();
+      if (!isPaused) {
+        setState(() {
+          // clear lines
+          clearLines();
 
-        // check landing
-        checkLanding();
+          // check landing
+          checkLanding();
 
-        // check if game is over
-        if (gameOver == true) {
-          timer.cancel();
-          showGameOverDialog();
-        }
+          // check if game is over
+          if (gameOver == true) {
+            timer.cancel();
+            showGameOverDialog();
+          }
 
-        //move current piece down
-        currentPiece.movePiece(Direction.down);
-      });
+          //move current piece down
+          currentPiece.movePiece(Direction.down);
+        });
+      }
     },
     );
   }
@@ -104,6 +112,8 @@ class _GameBoardState extends State<GameBoard> {
 
   //reset game
   void resetGame() {
+    gameTimer?.cancel();
+
     // clear the game board
     gameBoard = List.generate(
       colLength, 
@@ -227,6 +237,13 @@ class _GameBoardState extends State<GameBoard> {
       currentPiece.rotatePiece();
     });
   }
+
+  // toggle pause
+  void togglePause() {
+    setState(() {
+      isPaused = !isPaused;
+    });
+  }
  
  // clear lines 
   void clearLines() {
@@ -275,9 +292,29 @@ class _GameBoardState extends State<GameBoard> {
   }
 
   @override
+  void dispose() {
+    gameTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        leading: IconButton(
+          icon: Icon(
+            isPaused ? Icons.play_arrow : Icons.pause,
+            color: Colors.white,
+          ),
+          onPressed: togglePause,
+        ),
+        title: Text(
+          isPaused ? 'Paused' : 'Playing',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
       body: Column(
         children: [
 
@@ -355,3 +392,5 @@ class _GameBoardState extends State<GameBoard> {
     );
   }
 }
+
+
