@@ -5,9 +5,9 @@ class LevelManager {
   static const String unlockedLevelsKey = 'unlockedLevels';
   
   static Map<int, int> levelRequirements = {
-    1: 3,  // Level 1 requires 3 points
-    2: 5,  // Level 2 requires 5 points
-    3: 7,  // Level 3 requires 7 points
+    1: 1,  // Level 1 requires 3 points
+    2: 1,  // Level 2 requires 5 points
+    3: 1,  // Level 3 requires 7 points
   };
 
   static Future<List<bool>> getUnlockedLevels() async {
