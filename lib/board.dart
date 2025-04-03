@@ -51,14 +51,19 @@ class _GameBoardState extends State<GameBoard> {
   int currentLevel = 1;
   int requiredScore = 3;
   static const int linesPerLevel = 3;
-  static const int baseSpeed = 800;
-  static const double speedDecreaseFactor = 100;
+
+  // Replace speed constants with level-specific speeds
+  static const Map<int, int> LEVEL_SPEEDS = {
+    1: 800,  // Level 1: 800ms
+    2: 650,  // Level 2: 650ms
+    3: 500,  // Level 3: 500ms
+  };
 
   @override
   void initState() {
     super.initState();
-    currentLevel = widget.level;
-    requiredScore = LevelManager.levelRequirements[currentLevel] ?? 3;
+    currentLevel = widget.level.clamp(1, 3);
+    requiredScore = currentLevel * 3;
     startGame();
   }
 
@@ -70,11 +75,10 @@ class _GameBoardState extends State<GameBoard> {
     updateGameSpeed();
   }
 
-  // Add new method to update game speed
+  // Update speed calculation method
   void updateGameSpeed() {
-    double speed = baseSpeed - (speedDecreaseFactor * (currentLevel - 1));
-    speed = speed.clamp(100, baseSpeed).toDouble(); // Prevent speed from going too fast
-    Duration frameRate = Duration(milliseconds: speed.toInt());
+    int speed = LEVEL_SPEEDS[currentLevel] ?? 800;
+    Duration frameRate = Duration(milliseconds: speed);
     gameLoop(frameRate);
   }
 
@@ -133,24 +137,36 @@ class _GameBoardState extends State<GameBoard> {
     );
   }
 
-  // Add level completion dialog
+  // Modify startNextLevel method
+  void startNextLevel() {
+    setState(() {
+      currentLevel = (currentLevel + 1).clamp(1, 3);
+      currentScore = 0;
+      requiredScore = currentLevel * 3;
+      resetGame();
+    });
+  }
+
+  // Update level completion dialog
   void showLevelCompletionDialog() {
+    bool isLastLevel = currentLevel >= 3;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text('Level $currentLevel Complete!'),
+        title: Text(isLastLevel ? 'Game Completed!' : 'Level $currentLevel Complete!'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                3,
+                currentLevel,
                 (index) => Icon(Icons.star, color: Colors.yellow, size: 30),
               ),
             ),
             Text('Score: $currentScore'),
+            if (isLastLevel) Text('\nCongratulations! You completed all levels!'),
           ],
         ),
         actions: [
@@ -173,18 +189,16 @@ class _GameBoardState extends State<GameBoard> {
             },
             child: Text('Try Again'),
           ),
-          TextButton(
-            onPressed: () async {
-              await LevelManager.unlockNextLevel(currentLevel);
-              if (!mounted) return;
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => GameBoard(level: currentLevel + 1),
-                ),
-              );
-            },
-            child: Text('Next Level'),
-          ),
+          if (!isLastLevel)
+            TextButton(
+              onPressed: () async {
+                await LevelManager.unlockNextLevel(currentLevel);
+                if (!mounted) return;
+                startNextLevel();
+                Navigator.pop(context);
+              },
+              child: Text('Next Level'),
+            ),
         ],
       ),
     );
@@ -398,9 +412,16 @@ class _GameBoardState extends State<GameBoard> {
         ),
         actions: [
           IconButton(
+            icon: Icon(isPaused ? Icons.play_arrow : Icons.pause, color: Colors.white),
+            onPressed: togglePause,
+          ),
+          IconButton(
             icon: Icon(Icons.home, color: Colors.white),
             onPressed: () {
-              // Home button functionality will be implemented later
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => HomeScreen()),
+                (route) => false,
+              );
             },
           ),
         ],
@@ -410,92 +431,124 @@ class _GameBoardState extends State<GameBoard> {
         ),
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            //GAME GRID
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(2.0),
-                child: GridView.builder(
-                  itemCount: rowLength * colLength,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: rowLength),
-                  itemBuilder: (context, index) { 
-                    //get row and col of each index
-                    int row = (index / rowLength).floor();
-                    int col = index % rowLength;
+            Column(
+              children: [
+                //GAME GRID
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.0),
+                    child: GridView.builder(
+                      itemCount: rowLength * colLength,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: rowLength),
+                      itemBuilder: (context, index) { 
+                        //get row and col of each index
+                        int row = (index / rowLength).floor();
+                        int col = index % rowLength;
+                      
+                        //current piece
+                        if (currentPiece.position.contains(index)) {
+                          return Pixel(
+                            color:currentPiece.color, 
+                            );
+                        }
+                      
+                        // landed pieces
+                        else if(gameBoard[row][col] != null){
+                          final Tetromino? tetrominoType = gameBoard[row][col];
+                          return Pixel(color:tetrominoColors[tetrominoType]);
+                        }  
+                        //blank pixel
+                         else {
+                          return Pixel(
+                           color: Colors.grey[900],
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+
+                //SCORE AND LEVEL
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Text(
+                        'Score: $currentScore',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      Text(
+                        'Level: $currentLevel',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+
+                //GAME CONTROLS
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20.0, top: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // left
+                      IconButton(
+                        onPressed: moveLeft,
+                        color: Colors.white,
+                        icon: Icon(Icons.arrow_back_ios),
+                        ),
+                      
+                      //rotate
+                      IconButton(
+                        onPressed: rotatePiece,
+                        color: Colors.white, 
+                        icon: Icon(Icons.rotate_right),
+                        ),
                   
-                    //current piece
-                    if (currentPiece.position.contains(index)) {
-                      return Pixel(
-                        color:currentPiece.color, 
-                        );
-                    }
-                  
-                    // landed pieces
-                    else if(gameBoard[row][col] != null){
-                      final Tetromino? tetrominoType = gameBoard[row][col];
-                      return Pixel(color:tetrominoColors[tetrominoType]);
-                    }  
-                    //blank pixel
-                     else {
-                      return Pixel(
-                       color: Colors.grey[900],
-                      );
-                    }
-                  },
+                      //right
+                      IconButton(
+                        onPressed: moveRight,
+                        color: Colors.white, 
+                        icon: Icon(Icons.arrow_forward_ios),
+                        ),
+                      ],
+                  ),
+                )
+              ],
+            ),
+            if (isPaused)
+              Container(
+                color: Colors.black.withOpacity(0.7),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'PAUSED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: togglePause,
+                        child: Text('Resume Game'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-
-            //SCORE AND LEVEL
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Text(
-                    'Score: $currentScore',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  Text(
-                    'Level: $currentLevel',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-
-            //GAME CONTROLS
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20.0, top: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // left
-                  IconButton(
-                    onPressed: moveLeft,
-                    color: Colors.white,
-                    icon: Icon(Icons.arrow_back_ios),
-                    ),
-                  
-                  //rotate
-                  IconButton(
-                    onPressed: rotatePiece,
-                    color: Colors.white, 
-                    icon: Icon(Icons.rotate_right),
-                    ),
-              
-                  //right
-                  IconButton(
-                    onPressed: moveRight,
-                    color: Colors.white, 
-                    icon: Icon(Icons.arrow_forward_ios),
-                    ),
-                  ],
-              ),
-            )
           ],
         ),
       ),

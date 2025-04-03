@@ -1,14 +1,13 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LevelManager {
-  static const int maxLevels = 10;
+  static const int maxLevels = 3;
   static const String unlockedLevelsKey = 'unlockedLevels';
   
   static Map<int, int> levelRequirements = {
     1: 3,  // Level 1 requires 3 points
     2: 5,  // Level 2 requires 5 points
     3: 7,  // Level 3 requires 7 points
-    // Add more levels as needed
   };
 
   static Future<List<bool>> getUnlockedLevels() async {
