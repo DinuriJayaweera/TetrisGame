@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:tetris_game/piece.dart';
 import 'package:tetris_game/pixel.dart';
 import 'package:tetris_game/values.dart';
+import 'package:tetris_game/home_screen.dart';
+import 'package:tetris_game/level_manager.dart';
 
 /*
 
@@ -24,14 +26,15 @@ List<List<Tetromino?>> gameBoard = List.generate(
   );
 
 class GameBoard extends StatefulWidget {
-  const GameBoard({super.key});
+  final int level;
+  const GameBoard({Key? key, required this.level}) : super(key: key);
 
   @override
   State<GameBoard> createState() => _GameBoardState();
 }
 
 class _GameBoardState extends State<GameBoard> {
-  //current tetris piecce
+  //current tetris piece
   Piece currentPiece = Piece(type: Tetromino.L);
 
   //current score
@@ -44,11 +47,18 @@ class _GameBoardState extends State<GameBoard> {
   bool isPaused = false;
   Timer? gameTimer;
 
+  // Add new variables for level tracking
+  int currentLevel = 1;
+  int requiredScore = 3;
+  static const int linesPerLevel = 3;
+  static const int baseSpeed = 800;
+  static const double speedDecreaseFactor = 100;
+
   @override
   void initState() {
     super.initState();
-
-    // startt game when app starts
+    currentLevel = widget.level;
+    requiredScore = LevelManager.levelRequirements[currentLevel] ?? 3;
     startGame();
   }
 
@@ -56,8 +66,15 @@ class _GameBoardState extends State<GameBoard> {
     currentPiece.initializePiece();
     isPaused = false;
 
-    //frame refresh rate
-    Duration frameRate = const Duration(milliseconds: 500);
+    // Update frame rate calculation
+    updateGameSpeed();
+  }
+
+  // Add new method to update game speed
+  void updateGameSpeed() {
+    double speed = baseSpeed - (speedDecreaseFactor * (currentLevel - 1));
+    speed = speed.clamp(100, baseSpeed).toDouble(); // Prevent speed from going too fast
+    Duration frameRate = Duration(milliseconds: speed.toInt());
     gameLoop(frameRate);
   }
 
@@ -81,6 +98,12 @@ class _GameBoardState extends State<GameBoard> {
             showGameOverDialog();
           }
 
+          // check if level is complete
+          if (currentScore >= requiredScore) {
+            timer.cancel();
+            showLevelCompletionDialog();
+          }
+
           //move current piece down
           currentPiece.movePiece(Direction.down);
         });
@@ -95,7 +118,7 @@ class _GameBoardState extends State<GameBoard> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Game Over'),
-        content: Text("Your score is $currentScore"),
+        content: Text("Score: $currentScore\nLevel: $currentLevel"),
         actions: [
           TextButton(
             onPressed: () {
@@ -105,6 +128,63 @@ class _GameBoardState extends State<GameBoard> {
               Navigator.pop(context);
             },
             child: Text('Play Again'))
+        ],
+      ),
+    );
+  }
+
+  // Add level completion dialog
+  void showLevelCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Level $currentLevel Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                3,
+                (index) => Icon(Icons.star, color: Colors.yellow, size: 30),
+              ),
+            ),
+            Text('Score: $currentScore'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => HomeScreen()),
+                (route) => false,
+              );
+            },
+            child: Text('Home'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => GameBoard(level: currentLevel),
+                ),
+              );
+            },
+            child: Text('Try Again'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await LevelManager.unlockNextLevel(currentLevel);
+              if (!mounted) return;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => GameBoard(level: currentLevel + 1),
+                ),
+              );
+            },
+            child: Text('Next Level'),
+          ),
         ],
       ),
     );
@@ -124,14 +204,14 @@ class _GameBoardState extends State<GameBoard> {
     );
 
     // new game 
-  gameOver = false;
-  currentScore = 0;
+    gameOver = false;
+    currentScore = 0;
 
-  // create new piece
-  createNewPiece();
+    // create new piece
+    createNewPiece();
 
-  // start game again
-  startGame();
+    // start game again
+    startGame();
   }
 
   // check for collision in a future position
@@ -182,13 +262,13 @@ class _GameBoardState extends State<GameBoard> {
         }
       }
 
-      // once landed, creaate the next piece
+      // once landed, create the next piece
       createNewPiece();
     }
   }
 
   void createNewPiece(){
-    // create a random object to generate random tetroimino types
+    // create a random object to generate random tetromino types
     Random rand = Random();
 
     // create a new piece with random type
@@ -247,6 +327,8 @@ class _GameBoardState extends State<GameBoard> {
  
  // clear lines 
   void clearLines() {
+    int linesCleared = 0;
+    
     // step 1: Loop through each row of the game board from the bottom to top
     for (int row = colLength - 1; row >= 0; row--) {
       // step 2: Initialize a variable to track if the row is full
@@ -274,7 +356,14 @@ class _GameBoardState extends State<GameBoard> {
 
         // step 7: Increment the score!
         currentScore++;
+        linesCleared++;
       }
+    }
+
+    // Add level up logic
+    if (linesCleared > 0 && currentScore >= (currentLevel * linesPerLevel)) {
+      currentLevel++;
+      updateGameSpeed();
     }
   }
 
@@ -304,12 +393,17 @@ class _GameBoardState extends State<GameBoard> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         leading: IconButton(
-          icon: Icon(
-            isPaused ? Icons.play_arrow : Icons.pause,
-            color: Colors.white,
-          ),
-          onPressed: togglePause,
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.home, color: Colors.white),
+            onPressed: () {
+              // Home button functionality will be implemented later
+            },
+          ),
+        ],
         title: Text(
           isPaused ? 'Paused' : 'Playing',
           style: TextStyle(color: Colors.white),
@@ -355,12 +449,21 @@ class _GameBoardState extends State<GameBoard> {
               ),
             ),
 
-            //SCORE
+            //SCORE AND LEVEL
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Score: $currentScore',
-                style: TextStyle(color: Colors.white)
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text(
+                    'Score: $currentScore',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  Text(
+                    'Level: $currentLevel',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
               ),
             ),
 
