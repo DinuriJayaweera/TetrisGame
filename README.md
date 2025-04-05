@@ -1,3 +1,5 @@
 # Tetris_game
 
-![Tetris Game](lib/assets/tetrisImage.jpg)
+<div align="center">
+  <img src="lib/assets/tetrisImage.jpg" alt="Tetris Game" width="300">
+</div>
